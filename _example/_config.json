@@ -1,0 +1,5 @@
+{
+	"BackupDir": "_backup",
+	"SourceDir": "_example_source",
+	"TargetDir": "_example_target"
+}
