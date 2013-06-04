@@ -29,7 +29,7 @@ type siteFile struct {
 	fullContent string
 }
 
-func NewSiteFile(path string, siteBuilder *SiteBuilder) (*siteFile, error) {
+func NewSiteFile(path string, siteBuilder *SiteBuilder, siteVars SiteVars) (*siteFile, error) {
 	// pars vars and content
 	vars, content, err := parse(path)
 	if err != nil {
@@ -49,11 +49,19 @@ func NewSiteFile(path string, siteBuilder *SiteBuilder) (*siteFile, error) {
 		return nil, err
 	}
 
+	// Add site vars to page vars for template access
+	//for key, val := range siteVars {
+	//	vars["site."+key] = val
+	//}
+
 	// run content through templater.
-	tplt, err := template.New("template").Parse(content)
+	tplt := template.New("template")
+	tplt.Funcs(template.FuncMap{"site": func() SiteVars { return siteVars }})
+	tplt, err = tplt.Parse(content)
 	if err != nil {
 		return nil, err
 	}
+
 	stringHolder := new(stringHolder)
 	err = tplt.Execute(stringHolder, vars)
 	if err != nil {
@@ -65,7 +73,7 @@ func NewSiteFile(path string, siteBuilder *SiteBuilder) (*siteFile, error) {
 	var fullContent string
 	if templateSpecified {
 		htmlContent := template.HTML(content)
-		fullContent, err = renderTemplate(templatePath, htmlContent, vars, siteBuilder)
+		fullContent, err = renderTemplate(templatePath, htmlContent, vars, siteBuilder, siteVars)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +89,7 @@ func (file *siteFile) getContent() string {
 }
 
 // yes yes, this is almost an exact double of NewSiteFile...
-func renderTemplate(path string, childContent template.HTML, childVars map[string]string, siteBuilder *SiteBuilder) (string, error) {
+func renderTemplate(path string, childContent template.HTML, childVars map[string]string, siteBuilder *SiteBuilder, siteVars SiteVars) (string, error) {
 	tVars, tContent, err := parse(path)
 	if err != nil {
 		return "", err
@@ -105,7 +113,9 @@ func renderTemplate(path string, childContent template.HTML, childVars map[strin
 	vars.Content = childContent
 
 	// run content through templater.
-	tplt, err := template.New("template").Parse(tContent)
+	tplt := template.New("template")
+	tplt.Funcs(template.FuncMap{"site": func() SiteVars { return siteVars }})
+	tplt, err = tplt.Parse(tContent)
 	if err != nil {
 		return "", err
 	}
@@ -128,7 +138,7 @@ func renderTemplate(path string, childContent template.HTML, childVars map[strin
 			childVars[key] = val
 		}
 		htmlContent := template.HTML(content)
-		return renderTemplate(templatePath, htmlContent, childVars, siteBuilder)
+		return renderTemplate(templatePath, htmlContent, childVars, siteBuilder, siteVars)
 	} else {
 		return content, nil
 	}

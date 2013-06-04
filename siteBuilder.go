@@ -14,6 +14,7 @@ const DIRECTORY_PERMISSIONS = 0777
 type siteConfig struct {
 	Backup      bool
 	BackupDir   string
+	SiteUrl     string
 	SourceDir   string
 	TargetDir   string
 	TemplateDir string
@@ -23,6 +24,7 @@ func newSiteConfig() *siteConfig {
 	siteConfig := &siteConfig{
 		Backup:      true,
 		BackupDir:   "_backup",
+		SiteUrl:     "http://localhost:4000",
 		SourceDir:   ".",
 		TargetDir:   "_site",
 		TemplateDir: "templates",
@@ -87,7 +89,7 @@ func (siteBuilder *SiteBuilder) buildSite() {
 	}
 
 	// crawl source directory
-	// Need to do this better...
+	// Need a better way to do this
 	err = siteBuilder.buildSiteFiles()
 	if err != nil {
 		fmt.Println("Error building site files: " + err.Error())
@@ -130,11 +132,9 @@ func (siteBuilder *SiteBuilder) clearTargetDir() error {
 
 // NEED A BETTER DIRECTORY CRAWLER
 func (siteBuilder *SiteBuilder) buildSiteFiles() error {
+	siteVars := siteBuilder.siteVars()
 	return filepath.Walk(siteBuilder.config.SourceDir, func(path string, info os.FileInfo, _ error) error {
 		// check if path should be ignored
-		if path == siteBuilder.config.SourceDir {
-			return nil
-		}
 		ignore := siteBuilder.ignorePath(path)
 		if info.IsDir() {
 			if ignore {
@@ -147,7 +147,7 @@ func (siteBuilder *SiteBuilder) buildSiteFiles() error {
 		}
 
 		// Make a siteFile
-		siteFile, err := NewSiteFile(path, siteBuilder)
+		siteFile, err := NewSiteFile(path, siteBuilder, siteVars)
 		if err != nil {
 			return err
 		}
@@ -178,14 +178,22 @@ func (siteBuilder *SiteBuilder) pagePath(path string) string {
 	return filepath.Join(siteBuilder.config.TargetDir, relativePath)
 }
 
+func (siteBuilder *SiteBuilder) siteVars() SiteVars {
+	return SiteVars{"url": siteBuilder.config.SiteUrl}
+}
+
 func (siteBuilder *SiteBuilder) templatePath(path string) string {
 	return filepath.Join(siteBuilder.config.SourceDir, siteBuilder.config.TemplateDir, path)
 }
 
+// Janky function...
 func (siteBuilder *SiteBuilder) ignorePath(path string) bool {
 	relativePath, err := filepath.Rel(siteBuilder.config.SourceDir, path)
 	if err != nil {
 		panic(err.Error())
+	}
+	if relativePath == "." {
+		return false
 	}
 	slashRelativePath := strings.TrimPrefix(filepath.ToSlash(relativePath), "/")
 	pathParts := strings.Split(slashRelativePath, "/")
