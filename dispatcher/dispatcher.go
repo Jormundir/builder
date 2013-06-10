@@ -24,5 +24,10 @@ func (dispatcher *Dispatcher) Dispatch() error {
 			fmt.Println(err.Error())
 		}
 	}
+	server := dispatcher.site.MakeWebServer()
+	err := server.Serve()
+	if err != nil {
+		return err
+	}
 	return nil
 }

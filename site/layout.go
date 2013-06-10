@@ -28,7 +28,7 @@ func (layout *layout) generateHtml(childContent string, childVars map[string]str
 	if err != nil {
 		return "", err
 	}
-	htmlContent, err := converter.ConvertToHtml(templatedContent, filepath.Ext(layout.page.filepath))
+	htmlContent, _, err := converter.ConvertToHtml(templatedContent, filepath.Ext(layout.page.filepath))
 	if err != nil {
 		return "", err
 	}

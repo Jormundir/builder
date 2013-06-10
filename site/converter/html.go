@@ -6,25 +6,26 @@ import (
 	"strings"
 )
 
-func ConvertToHtml(content, ext string) (string, error) {
+func ConvertToHtml(content, ext string) (string, string, error) {
 	if len(strings.Trim(content, " ")) == 0 {
-		return "", nil
+		return "", ext, nil
 	}
 
 	switch strings.ToLower(ext) {
 	case ".md":
-		return markdownToHtml(content)
+		htmlContent := markdownToHtml(content)
+		return htmlContent, ".html", nil
 	case ".html":
-		return content, nil
+		return content, ext, nil
 	default:
-		return content, nil
+		return content, ext, nil
 	}
 }
 
-func markdownToHtml(content string) (string, error) {
+func markdownToHtml(content string) string {
 	var mparser = markdown.NewParser(nil)
 	stringBuffer := strings.NewReader(content)
 	bufferReader := new(bytes.Buffer)
 	mparser.Markdown(stringBuffer, markdown.ToHTML(bufferReader))
-	return bufferReader.String(), nil
+	return bufferReader.String()
 }

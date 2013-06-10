@@ -16,6 +16,7 @@ type page struct {
 	layout          *layout
 	vars            map[string]string
 	baseHtmlContent string
+	ext             string
 	fullHtmlContent string
 }
 
@@ -32,7 +33,7 @@ func makePage(path string, site *Site) (*page, error) {
 	}
 	page.vars = vars
 
-	untemplatedHtmlContent, err := converter.ConvertToHtml(page.fileContent, filepath.Ext(path))
+	untemplatedHtmlContent, ext, err := converter.ConvertToHtml(page.fileContent, filepath.Ext(path))
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +42,7 @@ func makePage(path string, site *Site) (*page, error) {
 		return nil, err
 	}
 	page.baseHtmlContent = baseHtmlContent
+	page.ext = ext
 
 	var fullHtmlContent string
 	if page.layout != nil {

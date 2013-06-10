@@ -57,7 +57,7 @@ func (site *Site) BuildSite() (errs []error) {
 
 	// Create page files
 	for path, page := range site.pages {
-		path = filepath.Join(site.config.TargetDir, path)
+		path = filepath.Join(site.config.TargetDir, path+page.ext)
 		MakeDirectoriesTo(path, DIR_MODE)
 		pagefile, err := os.Create(path)
 		if err != nil {
@@ -157,6 +157,10 @@ func (site *Site) ignorePath(path string) bool {
 	return ignore
 }
 
+func (site *Site) MakeWebServer() *WebServer {
+	return &WebServer{pages: site.pages, port: "8080"}
+}
+
 func (site *Site) parseSource() error {
 	return filepath.Walk(site.config.SourceDir, func(path string, info os.FileInfo, _ error) error {
 		ignore := site.ignorePath(path)
@@ -175,13 +179,21 @@ func (site *Site) parseSource() error {
 		if err != nil {
 			return err
 		}
-		relPath, err := filepath.Rel(site.config.SourceDir, path)
+		relPath, err := site.relPath(site.config.SourceDir, path)
 		if err != nil {
 			return err
 		}
 		site.pages[relPath] = page
 		return nil
 	})
+}
+
+func (site *Site) relPath(base, path string) (string, error) {
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(rel, filepath.Ext(path)), nil
 }
 
 func (site *Site) vars() map[string]string {
