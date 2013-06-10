@@ -1,6 +1,6 @@
 hello: hi ho hi ho
-template: template.md
+layout: layout
 ---
-{{ .hello }}
+{{ hello }}
 
 ## {{site.url}}

@@ -2,4 +2,4 @@ hi: ho
 ---
 ## template!
 
-{{.Content}}
+{{hi}}

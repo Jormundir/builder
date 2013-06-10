@@ -1,4 +1,4 @@
-package main
+package converter
 
 import (
 	"bytes"
@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-func convertToHTML(content, ext string) (string, error) {
+func ConvertToHtml(content, ext string) (string, error) {
 	if len(strings.Trim(content, " ")) == 0 {
 		return "", nil
 	}
 
 	switch strings.ToLower(ext) {
 	case ".md":
-		return markdownToHTML(content)
+		return markdownToHtml(content)
 	case ".html":
 		return content, nil
 	default:
@@ -21,7 +21,7 @@ func convertToHTML(content, ext string) (string, error) {
 	}
 }
 
-func markdownToHTML(content string) (string, error) {
+func markdownToHtml(content string) (string, error) {
 	var mparser = markdown.NewParser(nil)
 	stringBuffer := strings.NewReader(content)
 	bufferReader := new(bytes.Buffer)
