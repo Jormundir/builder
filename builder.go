@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fire/dispatcher"
+	"builder/dispatcher"
 	"fmt"
 )
 
