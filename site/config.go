@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-type siteConfig struct {
+type SiteConfig struct {
 	Backup    bool
 	BackupDir string
 	SiteUrl   string
@@ -15,9 +15,9 @@ type siteConfig struct {
 	LayoutDir string
 }
 
-func newSiteConfig() (*siteConfig, error) {
+func NewSiteConfig() (*SiteConfig, error) {
 	// Make config with defaults
-	siteConfig := &siteConfig{
+	siteConfig := &SiteConfig{
 		Backup:    true,
 		BackupDir: "_backup",
 		SiteUrl:   "http://localhost:4000",
@@ -35,7 +35,7 @@ func newSiteConfig() (*siteConfig, error) {
 	return siteConfig, nil
 }
 
-func (siteConfig *siteConfig) parseConfigFile() error {
+func (siteConfig *SiteConfig) parseConfigFile() error {
 	configFile, err := os.Open("_config.json")
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func (siteConfig *siteConfig) parseConfigFile() error {
 	return nil
 }
 
-func (siteConfig *siteConfig) parseCommandLine() {
+func (siteConfig *SiteConfig) parseCommandLine() {
 	flag.BoolVar(&siteConfig.Backup, "backup", siteConfig.Backup,
 		"files in target directory will be backed up to _backup/"+
 			" in your source directory.")

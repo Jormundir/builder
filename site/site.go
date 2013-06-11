@@ -9,25 +9,20 @@ import (
 const DIR_MODE = 0777
 
 type Site struct {
-	config      *siteConfig
+	config      *SiteConfig
 	directories []string
 	layouts     map[string]*layout
 	pages       map[string]*page
 }
 
-func NewSite() (*Site, error) {
-	// Get configuration
-	siteConfig, err := newSiteConfig()
-	if err != nil {
-		return nil, err
-	}
+func NewSite(config *SiteConfig) (*Site, error) {
 	site := &Site{
-		config:      siteConfig,
+		config:      config,
 		directories: make([]string, 0, 10),
 		layouts:     make(map[string]*layout),
 		pages:       make(map[string]*page),
 	}
-	err = site.parseSource()
+	err := site.parseSource()
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +123,10 @@ func (site *Site) getLayout(name string) (*layout, error) {
 	layout = makeLayout(page)
 	site.layouts[name] = layout
 	return layout, nil
+}
+
+func (site *Site) Dirs() []string {
+	return site.directories
 }
 
 // Janky function...

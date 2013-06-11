@@ -3,6 +3,7 @@ package site
 import (
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strings"
 )
@@ -12,25 +13,14 @@ type WebServer struct {
 	port  string
 }
 
-func (server *WebServer) lookupContentType(ext string) string {
-	switch ext {
-	case ".css":
-		return "text/css"
-	case ".js":
-		return "application/x-javascript"
-	default:
-		return "text/html"
-	}
-}
-
 func (server WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimLeft(r.URL.Path, "/")
 	requestedPage, ok := server.pages[path]
 	if !ok {
-		fmt.Println(path + " does not exist.")
+		fmt.Println(path + " requested but does not exist.")
 		return
 	}
-	w.Header().Set("Content-Type", server.lookupContentType(requestedPage.ext))
+	w.Header().Set("Content-Type", mime.TypeByExtension(requestedPage.ext))
 	io.WriteString(w, requestedPage.fullHtmlContent)
 }
 
