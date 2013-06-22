@@ -41,6 +41,7 @@ func NewPage(fpath string, site *Site) *page {
 	if err != nil {
 		log.Fatalln(err.Error())
 	}
+	page.addSmapVar("site", site.Vars)
 	return page
 }
 

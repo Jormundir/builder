@@ -12,6 +12,8 @@ type Site struct {
 	dirs    []string
 	layouts map[string]*layout
 	pages   map[string]*page
+
+	Vars map[string]string
 }
 
 func NewSite(cmdln map[string]*string) *Site {
@@ -21,12 +23,13 @@ func NewSite(cmdln map[string]*string) *Site {
 		dirs:    make([]string, 0, 10),
 		layouts: make(map[string]*layout),
 		pages:   make(map[string]*page),
+		Vars:    make(map[string]string),
 	}
 	return site.Init()
 }
 
 func (site *Site) Execute() {
-	fmt.Printf("%v\n", site.config)
+	fmt.Printf("%v\n", site)
 }
 
 func (site *Site) Init() *Site {
@@ -48,6 +51,7 @@ func (site *Site) Init() *Site {
 			site.pages[prel] = page
 			return nil
 		})
+	site.Vars["url"] = site.config.SiteUrl
 	return site
 }
 
