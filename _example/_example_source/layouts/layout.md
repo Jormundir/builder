@@ -1,5 +1,0 @@
-hi: ho
----
-## template!
-
-{{hi}}

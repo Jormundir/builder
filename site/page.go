@@ -3,153 +3,140 @@ package site
 import (
 	"bufio"
 	"builder/site/converter"
+	"bytes"
+	"errors"
 	"html/template"
+	"log"
 	"os"
-	"path/filepath"
+	fp "path/filepath"
 	"regexp"
 	"strings"
 )
 
 type page struct {
-	filepath        string
-	fileContent     string
-	layout          *layout
-	vars            map[string]string
-	baseHtmlContent string
-	ext             string
-	fullHtmlContent string
+	fpath string
+	fname string
+	fext  string
+
+	site   *Site
+	vars   template.FuncMap
+	layout *layout
+	fcont  string
+
+	htmlcont string
+	htmlext  string
+	page     string
 }
 
-func makePage(path string, site *Site) (*page, error) {
-	page := &page{filepath: path}
-	fileContent, layoutName, vars, err := page.parseSourceFile(page.filepath)
-	if err != nil {
-		return nil, err
-	}
-	page.fileContent = fileContent
-	page.layout, err = site.getLayout(layoutName)
-	if err != nil {
-		return nil, err
-	}
-	page.vars = vars
+func NewPage(fpath string, site *Site) *page {
+	page := &page{
+		fpath: fpath,
+		fname: fp.Base(fpath),
+		fext:  fp.Ext(fpath),
 
-	untemplatedHtmlContent, ext, err := converter.ConvertToHtml(page.fileContent, filepath.Ext(path))
-	if err != nil {
-		return nil, err
+		site: site,
+		vars: make(template.FuncMap),
 	}
-	baseHtmlContent, err := page.templateContent(untemplatedHtmlContent, mapToFuncs(page.vars), site.vars())
+	err := page.parseSource()
 	if err != nil {
-		return nil, err
+		log.Fatalln(err.Error())
 	}
-	page.baseHtmlContent = baseHtmlContent
-	page.ext = ext
+	return page
+}
 
-	var fullHtmlContent string
-	if page.layout != nil {
-		fullHtmlContent, err = page.layout.generateHtml(page.baseHtmlContent, page.vars, site)
+func (p *page) Build() *page {
+	uthtml, ext := converter.Html(p.fcont, p.fext)
+	err := p.template(uthtml)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	if p.layout != nil {
+		p.page, p.htmlext, err = p.layout.Render(p.vars, p.htmlcont)
 		if err != nil {
-			return nil, err
+			log.Fatalln(err.Error())
 		}
-	} else {
-		fullHtmlContent = page.baseHtmlContent
+		return p
 	}
-	page.fullHtmlContent = fullHtmlContent
-	return page, nil
+	p.page = p.htmlcont
+	p.htmlext = ext
+	return p
 }
 
-func (page *page) parseSourceFile(filepath string) (fileContent, layoutName string, vars map[string]string, err error) {
-	file, err := os.Open(filepath)
+func (p *page) addInterfaceVar(name string, in interface{}) {
+	p.vars[name] = func() interface{} { return in }
+}
+
+func (p *page) addSmapVar(name string, val map[string]string) {
+	p.vars[name] = func() map[string]string { return val }
+}
+
+func (p *page) addStringVar(name, val string) {
+	p.vars[name] = func() string { return val }
+}
+
+func (p *page) parseSource() error {
+	file, err := os.Open(p.fpath)
 	if err != nil {
-		return
+		return err
 	}
 	defer file.Close()
 
-	fileLines := make([]string, 0, 50)
-	encounteredVarsDivider := false
+	lines := make([]string, 0, 50)
+	divided := false
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		var lineIsVarsDivider bool
-		lineIsVarsDivider, err = regexp.MatchString("^[-]{3,}$", line)
+		divider, err := regexp.MatchString("^[-]{3,}$", line)
 		if err != nil {
-			return
+			return err
 		}
-
-		if lineIsVarsDivider && !encounteredVarsDivider {
-			encounteredVarsDivider = true
-			vars, err = page.parseVars(filepath, fileLines)
+		if divider && !divided {
+			divided = true
+			err = p.parseVars(lines)
 			if err != nil {
-				return
+				return err
 			}
-			fileLines = make([]string, 0, 50)
+			lines = make([]string, 0, 50)
 		} else {
-			// Trim initial empty lines
-			if len(strings.Trim(line, " ")) == 0 {
-				continue
-			}
-			fileLines = append(fileLines, line)
+			lines = append(lines, line)
 		}
 	}
-
-	var layoutSpecified bool
-	layoutName, layoutSpecified = vars["layout"]
-	if layoutSpecified {
-		delete(vars, "layout")
-	}
-	fileContent = strings.Join(fileLines, "\n")
-	return
+	p.fcont = strings.Join(lines, "\n")
+	return nil
 }
 
-func (page *page) parseVars(path string, varLines []string) (vars map[string]string, err error) {
-	vars = make(map[string]string)
-	for _, line := range varLines {
-		// skip empty lines, they don't have a variable declaration
-		if len(line) == 0 {
+func (p *page) parseVars(lns []string) error {
+	for _, li := range lns {
+		if len(li) == 0 {
 			continue
 		}
-
-		parts := strings.SplitN(line, ":", 2)
+		parts := strings.SplitN(li, ":", 2)
 		if len(parts) != 2 {
-			err = variableDeclarationError{op: "Parsing Variables", path: path}
-			return
+			return errors.New(p.fpath + " ERROR: parsing variables: " + li)
 		}
-
-		varName := strings.Trim(parts[0], " ")
-		varValue := strings.Trim(parts[1], " ")
-		vars[varName] = varValue
+		vname := strings.Trim(parts[0], " ")
+		vval := strings.Trim(parts[1], " ")
+		if vname == "layout" {
+			p.layout = p.site.getLayout(vval)
+		} else {
+			p.addStringVar(vname, vval)
+		}
 	}
-	return
+	return nil
 }
 
-func (page *page) templateContent(content string, vars map[string]interface{}, siteVars map[string]string) (string, error) {
-	var err error
-	tplt := template.New("template")
-	vars["site"] = func() map[string]string { return siteVars }
-	tplt.Funcs(vars)
-	tplt, err = tplt.Parse(content)
+func (p *page) template(cont string) error {
+	tpl := template.New(p.fpath)
+	tpl.Funcs(p.vars)
+	tpl, err := tpl.Parse(cont)
 	if err != nil {
-		return "", err
+		return err
 	}
-
-	stringHolder := new(stringHolder)
-	err = tplt.Execute(stringHolder, nil)
+	buf := new(bytes.Buffer)
+	err = tpl.Execute(buf, nil)
 	if err != nil {
-		return "", err
+		return err
 	}
-	content = stringHolder.string()
-	return content, nil
-}
-
-// STRINGHOLDER SEEMS REALLY STUPID...
-type stringHolder struct {
-	str []byte
-}
-
-func (str *stringHolder) string() string {
-	return string(str.str)
-}
-
-func (str *stringHolder) Write(p []byte) (int, error) {
-	str.str = append(str.str, p...)
-	return len(str.str), nil
+	p.htmlcont = buf.String()
+	return nil
 }
