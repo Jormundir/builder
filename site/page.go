@@ -47,6 +47,7 @@ func NewPage(fpath string, site *Site) *page {
 
 func (p *page) Build() *page {
 	uthtml, ext := converter.Html(p.fcont, p.fext)
+	p.addStringVar("path", p.site.webpath(p.fpath, ext))
 	err := p.template(uthtml)
 	if err != nil {
 		log.Fatalln(err.Error())
@@ -64,7 +65,7 @@ func (p *page) Build() *page {
 }
 
 func (p *page) addInterfaceVar(name string, in interface{}) {
-	p.vars[name] = func() interface{} { return in }
+	p.vars[name] = in
 }
 
 func (p *page) addSmapVar(name string, val map[string]string) {
@@ -72,7 +73,7 @@ func (p *page) addSmapVar(name string, val map[string]string) {
 }
 
 func (p *page) addStringVar(name, val string) {
-	p.vars[name] = func() string { return val }
+	p.vars[name] = func() template.HTML { return template.HTML(val) }
 }
 
 func (p *page) parseSource() error {

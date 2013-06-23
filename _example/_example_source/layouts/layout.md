@@ -1,5 +1,7 @@
-hi: ho
+layout: hi
 ---
 ## template!
 
-{{hi}}
+{{content}}
+
+path: {{page.path}}

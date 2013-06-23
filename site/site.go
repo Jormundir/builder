@@ -1,11 +1,12 @@
 package site
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 )
+
+const DIR_MODE = 0777
 
 type Site struct {
 	config  *siteConfig
@@ -18,26 +19,52 @@ type Site struct {
 
 func NewSite(cmdln map[string]*string) *Site {
 	config := NewConfig(cmdln)
-	site := &Site{
+	s := &Site{
 		config:  config,
 		dirs:    make([]string, 0, 10),
 		layouts: make(map[string]*layout),
 		pages:   make(map[string]*page),
 		Vars:    make(map[string]string),
 	}
-	return site.Init()
+	return s.Init()
 }
 
-func (site *Site) Execute() {
-	fmt.Printf("%v\n", site)
+func (s *Site) Execute() {
+	s.Build()
 }
 
-func (site *Site) Init() *Site {
-	filepath.Walk(site.config.SourceDir,
+// Would be cool to make a backup, and if anything breaks during build,
+// remake the target dir into what it was before the build.
+func (s *Site) Build() *Site {
+	for path, page := range s.pages {
+		dest := filepath.Join(s.config.TargetDir, path)
+		err := makeDirsTo(dest, DIR_MODE)
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+		pf, err := os.Create(dest)
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+		defer pf.Close()
+		_, err = pf.WriteString(page.page)
+		if err != nil {
+			log.Print(err)
+			continue
+		}
+	}
+	return s
+}
+
+func (s *Site) Init() *Site {
+	s.Vars["url"] = s.config.SiteUrl
+	filepath.Walk(s.config.SourceDir,
 		func(p string, i os.FileInfo, _ error) error {
-			ignr := site.ignorePath(p)
+			ignr := s.ignorePath(p)
 			if i.IsDir() {
-				site.dirs = append(site.dirs, p)
+				s.dirs = append(s.dirs, p)
 				if ignr {
 					return filepath.SkipDir
 				}
@@ -46,25 +73,24 @@ func (site *Site) Init() *Site {
 			if ignr {
 				return nil
 			}
-			page := NewPage(p, site).Build() // worry about aggregating errors later.
-			prel := site.relPath(p)
-			site.pages[prel] = page
+			page := NewPage(p, s).Build() // worry about aggregating errors later.
+			prel := s.relPath(page.fpath, page.htmlext)
+			s.pages[prel] = page
 			return nil
 		})
-	site.Vars["url"] = site.config.SiteUrl
-	return site
+	return s
 }
 
-func (site *Site) getLayout(nm string) *layout {
+func (s *Site) getLayout(nm string) *layout {
 	if len(nm) == 0 {
 		log.Println("layout " + nm + " cannot be found.")
 		return nil
 	}
-	lyt, ok := site.layouts[nm]
+	lyt, ok := s.layouts[nm]
 	if ok {
 		return lyt
 	}
-	gp := filepath.Join(site.config.SourceDir, site.config.LayoutDir, nm) + ".*"
+	gp := filepath.Join(s.config.SourceDir, s.config.LayoutDir, nm) + ".*"
 	matches, err := filepath.Glob(gp)
 	if err != nil {
 		log.Println("Error finding layout files for " + nm)
@@ -78,36 +104,36 @@ func (site *Site) getLayout(nm string) *layout {
 		log.Println("Ambiguous layout name " + nm)
 		return nil
 	}
-	lyt = newLayout(matches[0], site)
-	site.layouts[nm] = lyt
+	lyt = newLayout(matches[0], s)
+	s.layouts[nm] = lyt
 	return lyt
 }
 
-func (site *Site) ignorePath(p string) bool {
-	rp, err := filepath.Rel(site.config.SourceDir, p)
+func (s *Site) ignorePath(p string) bool {
+	rp, err := filepath.Rel(s.config.SourceDir, p)
 	if err != nil {
 		log.Fatal(p + " Error checking ignore relative path")
 	}
 	if rp == "." {
 		return false
 	}
-	match, err := filepath.Match("_*", p)
+	match, err := superMatch(rp, "_*", ".*", s.config.LayoutDir)
 	if err != nil {
 		log.Fatal(p + " Error checking against ignore path")
-	}
-	if !match {
-		match, err = filepath.Match(".*", p)
-		if err != nil {
-			log.Fatal(p + " Error checking against ignore path")
-		}
 	}
 	return match
 }
 
-func (site *Site) relPath(p string) string {
-	rp, err := filepath.Rel(site.config.SourceDir, p)
+func (s *Site) relPath(p, ext string) string {
+	rp, err := filepath.Rel(s.config.SourceDir, p)
 	if err != nil {
 		log.Fatal(p + " Error getting relative path")
 	}
-	return rp
+	extLen := len(filepath.Ext(p))
+	rp = rp[0:(len(rp) - extLen)]
+	return rp + ext
+}
+
+func (s *Site) webpath(p, ext string) string {
+	return "/" + filepath.ToSlash(s.relPath(p, ext))
 }
