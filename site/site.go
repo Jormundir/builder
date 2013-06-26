@@ -1,202 +1,158 @@
 package site
 
 import (
+	"log"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 const DIR_MODE = 0777
 
 type Site struct {
-	config      *SiteConfig
-	directories []string
-	layouts     map[string]*layout
-	pages       map[string]*page
+	config  *siteConfig
+	dirs    []string
+	layouts map[string]*layout
+	pages   map[string]*page
+
+	Vars map[string]string
 }
 
-func NewSite(config *SiteConfig) (*Site, error) {
-	site := &Site{
-		config:      config,
-		directories: make([]string, 0, 10),
-		layouts:     make(map[string]*layout),
-		pages:       make(map[string]*page),
+func NewSite(cmdln map[string]*string) *Site {
+	config := NewConfig(cmdln)
+	s := &Site{
+		config:  config,
+		dirs:    make([]string, 0, 10),
+		layouts: make(map[string]*layout),
+		pages:   make(map[string]*page),
+		Vars:    make(map[string]string),
 	}
-	err := site.parseSource()
-	if err != nil {
-		return nil, err
-	}
-	return site, nil
+	s.Vars["url"] = s.config.SiteUrl
+	return s.Init()
 }
 
-func (site *Site) BuildSite() (errs []error) {
-	errs = make([]error, 0, 10)
-	// backup target directory
-	if site.config.Backup {
-		// clear backup directory because path collisions can cause errors. Make more robust later..
-		err := site.clearDir(site.config.BackupDir)
-		if err != nil {
-			return append(errs, err)
-		}
-		err = site.backupTargetDir()
-		if err != nil {
-			return append(errs, err)
-		}
-	}
+func (s *Site) Execute() {
+	s.Build()
+	s.webMode()
+	s.Init()
 
-	// wipe target directory
-	err := site.clearDir(site.config.TargetDir)
-	if err != nil {
-		return append(errs, err)
-	}
+	watcher := newWatcher(s)
+	watcher.watch()
 
-	// Create page files
-	for path, page := range site.pages {
-		path = filepath.Join(site.config.TargetDir, path+page.ext)
-		MakeDirectoriesTo(path, DIR_MODE)
-		pagefile, err := os.Create(path)
+	webserver := newWebserver(s)
+	webserver.serve()
+}
+
+// Would be cool to make a backup, and if anything breaks during build,
+// remake the target dir into what it was before the build.
+// Backup should happen in execute so the watcher doesn't backup
+// with every file change
+func (s *Site) Build() *Site {
+	os.RemoveAll(s.config.TargetDir)
+	for path, page := range s.pages {
+		dest := filepath.Join(s.config.TargetDir, path)
+		err := makeDirsTo(dest, DIR_MODE)
 		if err != nil {
-			errs = append(errs, err)
+			log.Print(err)
 			continue
 		}
-		defer pagefile.Close()
-		_, err = pagefile.WriteString(page.fullHtmlContent)
+		pf, err := os.Create(dest)
 		if err != nil {
-			errs = append(errs, err)
+			log.Print(err)
+			continue
+		}
+		defer pf.Close()
+		_, err = pf.WriteString(page.page)
+		if err != nil {
+			log.Print(err)
+			continue
 		}
 	}
-	return
+	return s
 }
 
-func (site *Site) backupTargetDir() error {
-	return filepath.Walk(site.config.TargetDir, func(path string, info os.FileInfo, _ error) error {
-		if info == nil {
+func (s *Site) Init() *Site {
+	filepath.Walk(s.config.SourceDir,
+		func(p string, i os.FileInfo, _ error) error {
+			ignr := s.ignorePath(p)
+			if i.IsDir() {
+				s.dirs = append(s.dirs, p)
+				if ignr {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if ignr {
+				return nil
+			}
+			page := NewPage(p, s).Build() // worry about aggregating errors later.
+			prel := s.relPath(page.fpath, page.htmlext)
+			s.pages[prel] = page
 			return nil
-		}
+		})
+	return s
+}
 
-		backupPath, err := filepath.Rel(site.config.TargetDir, path)
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			backupDirPath := filepath.Join(site.config.BackupDir, backupPath)
-			err := os.MkdirAll(backupDirPath, info.Mode())
-			if err != nil {
-				return err
-			}
-		} else {
-			_, err := CopyFile(filepath.Join(site.config.BackupDir, backupPath), path)
-			if err != nil {
-				return err
-			}
-		}
+func (s *Site) getLayout(nm string) *layout {
+	if len(nm) == 0 {
+		log.Println("layout " + nm + " cannot be found.")
 		return nil
-	})
-}
-
-func (site *Site) clearDir(path string) error {
-	return os.RemoveAll(path)
-}
-
-func (site *Site) getLayout(name string) (*layout, error) {
-	if len(name) == 0 {
-		return nil, nil
 	}
-	layout, ok := site.layouts[name]
+	lyt, ok := s.layouts[nm]
 	if ok {
-		return layout, nil
+		return lyt
 	}
-
-	layoutGlobPath := filepath.Join(site.config.SourceDir, site.config.LayoutDir, name) + ".*"
-	matches, err := filepath.Glob(layoutGlobPath)
+	gp := filepath.Join(s.config.SourceDir, s.config.LayoutDir, nm) + ".*"
+	matches, err := filepath.Glob(gp)
 	if err != nil {
-		return nil, err
+		log.Println("Error finding layout files for " + nm)
+		return nil
+	}
+	if len(matches) == 0 {
+		log.Println("Layout could not be found: " + nm)
+		return nil
 	}
 	if len(matches) != 1 {
-		return nil, ambiguousLayoutNameError{name}
+		log.Println("Ambiguous layout name " + nm)
+		return nil
 	}
-	page, err := makePage(matches[0], site)
-	if err != nil {
-		return nil, err
-	}
-	layout = makeLayout(page)
-	site.layouts[name] = layout
-	return layout, nil
+	lyt = newLayout(matches[0], s)
+	s.layouts[nm] = lyt
+	return lyt
 }
 
-func (site *Site) Dirs() []string {
-	return site.directories
-}
-
-// Janky function...
-func (site *Site) ignorePath(path string) bool {
-	relativePath, err := filepath.Rel(site.config.SourceDir, path)
+func (s *Site) ignorePath(p string) bool {
+	rp, err := filepath.Rel(s.config.SourceDir, p)
 	if err != nil {
-		panic(err.Error())
+		log.Fatal(p + " Error checking ignore relative path")
 	}
-	if relativePath == "." {
+	if rp == "." {
 		return false
 	}
-	slashRelativePath := strings.TrimPrefix(filepath.ToSlash(relativePath), "/")
-	pathParts := strings.Split(slashRelativePath, "/")
-	ignorePatterns := []string{"_*", ".*", site.config.LayoutDir}
-	ignore := false
-	for _, part := range pathParts {
-		for _, pattern := range ignorePatterns {
-			match, err := filepath.Match(pattern, part)
-			if err != nil {
-				panic(err.Error())
-			}
-			if match {
-				ignore = true
-			}
-		}
-	}
-	return ignore
-}
-
-func (site *Site) MakeWebServer() *WebServer {
-	return &WebServer{pages: site.pages, port: "8080"}
-}
-
-func (site *Site) parseSource() error {
-	return filepath.Walk(site.config.SourceDir, func(path string, info os.FileInfo, _ error) error {
-		ignore := site.ignorePath(path)
-		if info.IsDir() {
-			site.directories = append(site.directories, path)
-			if ignore {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if ignore {
-			return nil
-		}
-
-		page, err := makePage(path, site)
-		if err != nil {
-			return err
-		}
-		relPath, err := site.relPath(site.config.SourceDir, path)
-		if err != nil {
-			return err
-		}
-		site.pages[relPath] = page
-		return nil
-	})
-}
-
-func (site *Site) relPath(base, path string) (string, error) {
-	rel, err := filepath.Rel(base, path)
+	match, err := superMatch(rp, "_*", ".*", s.config.LayoutDir)
 	if err != nil {
-		return "", err
+		log.Fatal(p + " Error checking against ignore path")
 	}
-	return strings.TrimRight(rel, filepath.Ext(path)), nil
+	return match
 }
 
-func (site *Site) vars() map[string]string {
-	return map[string]string{
-		"url": site.config.SiteUrl,
+func (s *Site) relPath(p, ext string) string {
+	rp, err := filepath.Rel(s.config.SourceDir, p)
+	if err != nil {
+		log.Fatal(p + " Error getting relative path")
 	}
+	extLen := len(filepath.Ext(p))
+	rp = rp[0:(len(rp) - extLen)]
+	return rp + ext
+}
+
+func (s *Site) webpath(p, ext string) string {
+	return "/" + filepath.ToSlash(s.relPath(p, ext))
+}
+
+func (s *Site) buildMode() {
+	s.Vars["url"] = s.config.SiteUrl
+}
+
+func (s *Site) webMode() {
+	s.Vars["url"] = "http://localhost:1337"
 }

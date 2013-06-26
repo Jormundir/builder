@@ -2,12 +2,13 @@ package site
 
 import (
 	"encoding/json"
-	"flag"
+	"log"
 	"os"
+	"reflect"
 )
 
-type SiteConfig struct {
-	Backup    bool
+type siteConfig struct {
+	Backup    string
 	BackupDir string
 	SiteUrl   string
 	SourceDir string
@@ -15,48 +16,26 @@ type SiteConfig struct {
 	LayoutDir string
 }
 
-func NewSiteConfig() (*SiteConfig, error) {
-	// Make config with defaults
-	siteConfig := &SiteConfig{
-		Backup:    true,
-		BackupDir: "_backup",
-		SiteUrl:   "http://localhost:4000",
-		SourceDir: ".",
-		TargetDir: "_site",
-		LayoutDir: "layouts",
+func NewConfig(cmdln map[string]*string) *siteConfig {
+	sc := &siteConfig{}
+	for key, val := range cmdln {
+		ref := reflect.ValueOf(sc).Elem().FieldByName(key)
+		ref.SetString(*val)
 	}
-	// Override defaults with config file declarations
-	err := siteConfig.parseConfigFile()
-	if err != nil {
-		return nil, err
-	}
-	// Override everything with command line arguments
-	siteConfig.parseCommandLine()
-	return siteConfig, nil
+	return sc.parseConfigFile()
 }
 
-func (siteConfig *SiteConfig) parseConfigFile() error {
-	configFile, err := os.Open("_config.json")
+func (s *siteConfig) parseConfigFile() *siteConfig {
+	sf, err := os.Open("_config.json")
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	defer configFile.Close()
+	defer sf.Close()
 
-	jsonParser := json.NewDecoder(configFile)
-	err = jsonParser.Decode(siteConfig)
+	jsonParser := json.NewDecoder(sf)
+	err = jsonParser.Decode(s)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	return nil
-}
-
-func (siteConfig *SiteConfig) parseCommandLine() {
-	flag.BoolVar(&siteConfig.Backup, "backup", siteConfig.Backup,
-		"files in target directory will be backed up to _backup/"+
-			" in your source directory.")
-	flag.StringVar(&siteConfig.SourceDir, "source", siteConfig.SourceDir,
-		"where your project source files are.")
-	flag.StringVar(&siteConfig.TargetDir, "target", siteConfig.TargetDir,
-		"where to build your site")
-	flag.Parse()
+	return s
 }
