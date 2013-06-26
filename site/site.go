@@ -35,14 +35,11 @@ func (s *Site) Execute() {
 	s.webMode()
 	s.Init()
 
+	watcher := newWatcher(s)
+	watcher.watch()
+
 	webserver := newWebserver(s)
 	webserver.serve()
-	log.Println("helo")
-	for {
-	}
-
-	//watcher := newWatcher(s)
-	//watcher.watch()
 }
 
 // Would be cool to make a backup, and if anything breaks during build,
