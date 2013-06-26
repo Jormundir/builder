@@ -1,4 +1,3 @@
-
 /**
  * Problems
  **/
@@ -11,7 +10,7 @@ no work has been put in to making errors consistent and controlled.
 
 variable naming may be inconsistent throughout the code
 
-watcher site rebuild is tightly couple to knowing the site is running a webserver.
+watcher site rebuild is tightly coupled to knowing the site is running a webserver.
 
 site has to be init for target build, then has to be re-init for webserver.
 
