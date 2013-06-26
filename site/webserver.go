@@ -1,31 +1,35 @@
 package site
 
 import (
-	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
+	"path/filepath"
 	"strings"
 )
 
-type WebServer struct {
-	pages map[string]*page
-	port  string
+type webserver struct {
+	site *Site
 }
 
-func (server WebServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimLeft(r.URL.Path, "/")
-	requestedPage, ok := server.pages[path]
+func newWebserver(s *Site) *webserver {
+	return &webserver{s}
+}
+
+func (s webserver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := filepath.FromSlash(strings.TrimLeft(r.URL.Path, "/"))
+	rp, ok := s.site.pages[path]
 	if !ok {
-		fmt.Println(path + " requested but does not exist.")
+		log.Println(path + " requested but does not exist.")
 		return
 	}
-	w.Header().Set("Content-Type", mime.TypeByExtension(requestedPage.ext))
-	io.WriteString(w, requestedPage.fullHtmlContent)
+	w.Header().Set("Content-Type", mime.TypeByExtension(rp.htmlext))
+	io.WriteString(w, rp.page)
 }
 
-func (server *WebServer) Serve() error {
-	err := http.ListenAndServe("localhost:"+server.port, server)
+func (s *webserver) serve() error {
+	err := http.ListenAndServe("localhost:1337", s)
 	if err != nil {
 		return err
 	}

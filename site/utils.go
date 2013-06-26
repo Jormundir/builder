@@ -1,38 +1,28 @@
 package site
 
 import (
-	"io"
 	"os"
-	"path/filepath"
+	fp "path/filepath"
+	"strings"
 )
 
-func CopyFile(dest, src string) (int64, error) {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return 0, err
-	}
-	defer srcFile.Close()
-
-	destFile, err := os.Create(dest)
-	if err != nil {
-		return 0, err
-	}
-	defer destFile.Close()
-	return io.Copy(destFile, srcFile)
-}
-
-func MakeDirectoriesTo(path string, mode os.FileMode) error {
-	_, err := os.Stat(path)
+func makeDirsTo(p string, mode os.FileMode) error {
+	_, err := os.Stat(p)
 	if os.IsNotExist(err) {
-		err = os.MkdirAll(filepath.Dir(path), mode)
+		err = os.MkdirAll(fp.Dir(p), mode)
 	}
 	return err
 }
 
-func mapToFuncs(vars map[string]string) map[string]interface{} {
-	funcs := make(map[string]interface{})
-	for name, val := range vars {
-		funcs[name] = func() string { return val }
+func superMatch(name string, patterns ...string) (matched bool, err error) {
+	pathParts := strings.Split(name, string(fp.Separator))
+	for _, part := range pathParts {
+		for _, pattern := range patterns {
+			matched, err = fp.Match(pattern, part)
+			if matched {
+				return
+			}
+		}
 	}
-	return funcs
+	return
 }

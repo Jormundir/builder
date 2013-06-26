@@ -1,43 +1,40 @@
 package site
 
 import (
-	"builder/site/converter"
-	"path/filepath"
+	tpl "html/template"
+	"reflect"
 )
 
 type layout struct {
-	page *page
+	pg *page
 }
 
-func makeLayout(page *page) *layout {
-	return &layout{page: page}
+func newLayout(p string, s *Site) *layout {
+	return &layout{pg: NewPage(p, s)}
 }
 
-func (layout *layout) generateHtml(childContent string, childVars map[string]string, site *Site) (string, error) {
-	content, layoutName, vars, err := layout.page.parseSourceFile(layout.page.filepath)
+func (l *layout) Render(vars tpl.FuncMap, cont string) (string, string, error) {
+	err := l.pg.parseSource()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-
-	// Turn vars into a map of functions that return the corresponding string value
-	tVars := mapToFuncs(vars)
-	tVars["page"] = func() map[string]string { return childVars }
-	tVars["content"] = func() string { return childContent }
-
-	templatedContent, err := layout.page.templateContent(content, tVars, site.vars())
-	if err != nil {
-		return "", err
+	l.pg.addStringVar("content", cont)
+	// hacky hacky...
+	page := make(map[string]tpl.HTML)
+	for name, fun := range vars {
+		if name == "site" {
+			continue
+		}
+		switch n := reflect.TypeOf(fun).Out(0).Name(); n {
+		case "HTML":
+			var v []reflect.Value
+			page[name] = tpl.HTML(reflect.ValueOf(fun).Call(v)[0].Convert(reflect.TypeOf("")).String())
+		default:
+			continue
+		}
 	}
-	htmlContent, _, err := converter.ConvertToHtml(templatedContent, filepath.Ext(layout.page.filepath))
-	if err != nil {
-		return "", err
-	}
-	parentLayout, err := site.getLayout(layoutName)
-	if err != nil {
-		return "", err
-	}
-	if parentLayout != nil {
-		return parentLayout.generateHtml(htmlContent, vars, site)
-	}
-	return htmlContent, nil
+	// not proud of this.
+	l.pg.vars["page"] = func() map[string]tpl.HTML { return page }
+	l.pg.Build()
+	return l.pg.page, l.pg.htmlext, nil
 }
