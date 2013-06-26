@@ -23,3 +23,11 @@ site has to be init for target build, then has to be re-init for webserver.
 
 - Pagination.
 - web path making of pages, based on config.
+
+
+/**
+ * Nice to haves
+ **/
+
+- Backup target dir.
+- Command based execution
