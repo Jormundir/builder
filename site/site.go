@@ -26,16 +26,31 @@ func NewSite(cmdln map[string]*string) *Site {
 		pages:   make(map[string]*page),
 		Vars:    make(map[string]string),
 	}
+	s.Vars["url"] = s.config.SiteUrl
 	return s.Init()
 }
 
 func (s *Site) Execute() {
 	s.Build()
+	s.webMode()
+	s.Init()
+
+	webserver := newWebserver(s)
+	webserver.serve()
+	log.Println("helo")
+	for {
+	}
+
+	//watcher := newWatcher(s)
+	//watcher.watch()
 }
 
 // Would be cool to make a backup, and if anything breaks during build,
 // remake the target dir into what it was before the build.
+// Backup should happen in execute so the watcher doesn't backup
+// with every file change
 func (s *Site) Build() *Site {
+	os.RemoveAll(s.config.TargetDir)
 	for path, page := range s.pages {
 		dest := filepath.Join(s.config.TargetDir, path)
 		err := makeDirsTo(dest, DIR_MODE)
@@ -59,7 +74,6 @@ func (s *Site) Build() *Site {
 }
 
 func (s *Site) Init() *Site {
-	s.Vars["url"] = s.config.SiteUrl
 	filepath.Walk(s.config.SourceDir,
 		func(p string, i os.FileInfo, _ error) error {
 			ignr := s.ignorePath(p)
@@ -136,4 +150,12 @@ func (s *Site) relPath(p, ext string) string {
 
 func (s *Site) webpath(p, ext string) string {
 	return "/" + filepath.ToSlash(s.relPath(p, ext))
+}
+
+func (s *Site) buildMode() {
+	s.Vars["url"] = s.config.SiteUrl
+}
+
+func (s *Site) webMode() {
+	s.Vars["url"] = "http://localhost:1337"
 }

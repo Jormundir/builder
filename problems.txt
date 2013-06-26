@@ -1,0 +1,9 @@
+
+
+page paths are stuck inside the page.Build method (inside vars) and can't be changed. So nested layouts expose layout paths instead of the deep page's path.
+
+page variables are really hackily passed to layouts, and there isn't much transitivity of variables through layout chains.
+
+no work has been put in to making errors consistent and controlled.
+
+variable naming may be inconsistent throughout the code
