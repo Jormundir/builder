@@ -1,4 +1,4 @@
-package site
+package builder
 
 import (
 	"github.com/howeyc/fsnotify"
@@ -6,14 +6,18 @@ import (
 )
 
 type watcher struct {
-	site *Site
+	site    *Site
+	onEvent func()
 }
 
-func newWatcher(s *Site) *watcher {
-	return &watcher{s}
+func newWatcher(s *Site, onEvent func()) *watcher {
+	return &watcher{
+		site:    s,
+		onEvent: onEvent,
+	}
 }
 
-func (w *watcher) watch() error {
+func (w *watcher) Watch() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
@@ -23,12 +27,8 @@ func (w *watcher) watch() error {
 		for {
 			select {
 			case ev := <-watcher.Event:
-				log.Println(ev.Name + " detected, rebuilding site..")
-				w.site.buildMode()
-				w.site.Init()
-				w.site.Build()
-				w.site.webMode()
-				w.site.Init()
+				log.Println(ev.Name + " detected.")
+				w.onEvent()
 			case er := <-watcher.Error:
 				log.Println(er)
 				break
@@ -36,7 +36,7 @@ func (w *watcher) watch() error {
 		}
 	}()
 
-	for _, dir := range w.site.dirs {
+	for _, dir := range w.site.getDirs() {
 		err := watcher.Watch(dir)
 		if err != nil {
 			return err

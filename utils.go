@@ -1,4 +1,4 @@
-package site
+package builder
 
 import (
 	"os"
