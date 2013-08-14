@@ -19,8 +19,7 @@ func newWebConverter() *webConverter {
 func (wc *webConverter) toHtml(content, ext string) {
 	switch strings.ToLower(ext) {
 	case ".md":
-		html := wc.markdownToHtml(content)
-		wc.webBody = html
+		wc.webBody = wc.markdownToHtml(content)
 		wc.webExt = ".html"
 	default:
 		wc.webBody = content
