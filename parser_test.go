@@ -20,15 +20,19 @@ var (
 	}
 	testExpectedBody = "## this is some page content\n" +
 		"more page content\n" +
-		"{{width}} variable use\n"
+		"{{width}} variable use"
 )
 
-func testParse(t *testing.T) {
+func TestParse(t *testing.T) {
 	// make file
 	file, err := os.Create(filename)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		file.Close()
+		os.Remove(filename)
+	}()
 	// fill with test contents
 	_, err = file.WriteString(testContent)
 	if err != nil {
@@ -51,9 +55,6 @@ func testParse(t *testing.T) {
 	case parser.body != testExpectedBody:
 		t.Fatal("Parser body \n" + parser.body + "\n\ndoes not match expected\n" + testExpectedBody)
 	}
-	// delete file
-	file.Close()
-	os.Remove(filename)
 }
 
 func mapsEqual(map1, map2 map[string]string) bool {

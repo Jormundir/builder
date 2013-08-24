@@ -15,12 +15,12 @@ func newHtmlTemplater() *htmlTemplater {
 
 func (ht *htmlTemplater) template(filepath, content string, pVars, sVars map[string]string) error {
 	funcs := make(template.FuncMap)
+	if contentVar, ok := pVars[CONTENT]; ok {
+		funcs[CONTENT] = func() template.HTML { return template.HTML(contentVar) }
+		delete(pVars, CONTENT)
+	}
 	for name, val := range pVars {
-		if name == CONTENT {
-			funcs[name] = func() template.HTML { return template.HTML(val) }
-		} else {
-			funcs[name] = func() string { return val }
-		}
+		funcs[name] = func() string { return val }
 	}
 	funcs[SITE] = func() map[string]string { return sVars }
 
